@@ -2,12 +2,14 @@ import { Request, Response, NextFunction } from "express";
 import { AppDataSource } from "../data-source";
 import { Comment } from "../entity/Comments";
 import { Post } from "../entity/Post";
+import { Vote } from "../entity/UserVote";
 export const postController = {
   async getAllPosts(req: Request, res: Response, next: NextFunction) {
     try {
       const posts = await AppDataSource.getRepository(Post).find({
         relations: {
           comments: true,
+          votes: true,
         },
       });
       res.json({ data: posts });
@@ -51,21 +53,24 @@ export const postController = {
   },
   async deletePost(req: Request, res: Response, next: NextFunction) {
     try {
-      const deletedOne = await AppDataSource.getRepository(Post).delete(
-        +req.params.id
-      );
+      const deletedOne = await AppDataSource.getRepository(Post).delete({
+        id: +req.params.id,
+      });
       res.json({ message: "succefully deleted Post", data: deletedOne });
-    } catch (error) {}
+    } catch (error) {
+      next(error);
+    }
   },
   async createComment(req: Request, res: Response, next: NextFunction) {
     try {
       const post = await AppDataSource.getRepository(Post).findOneBy({
         id: +req.params.id,
       });
+
       const comment = AppDataSource.getRepository(Comment).create({
-        body: req.body.body,
-        authorId: req.body.authorId,
+        ...req.body,
         post,
+        userId: post.userId,
       });
       const savedComment = await AppDataSource.getRepository(Comment).save(
         comment
@@ -110,6 +115,30 @@ export const postController = {
         message: "successfully delete comment",
         data: deletedComment,
       });
+    } catch (error) {
+      next(error);
+    }
+  },
+  async createVote(req: Request, res: Response, next: NextFunction) {
+    try {
+      let userVote;
+      const post = await AppDataSource.getRepository(Post).findOneBy({
+        id: +req.params.postId,
+      });
+      const existedVote = post.votes?.find(
+        (vote) => vote.userId === post.userId
+      );
+
+      if (existedVote) {
+        return res.json({ data: existedVote });
+      }
+      const createdVote = AppDataSource.getRepository(Vote).create({
+        userVote: +req.body.userVote,
+        post,
+        userId: post.userId,
+      });
+      const vote = await AppDataSource.getRepository(Vote).save(createdVote);
+      return res.status(200).json({ data: vote });
     } catch (error) {
       next(error);
     }
